@@ -1,0 +1,36 @@
+const axios =require('axios');
+const cheerio = require('cheerio');
+
+axios.get("https://www.jamesqquick.com/talks")
+        .then((res) => {
+            // console.log(res.data);
+            const posts=[];
+            const $=cheerio.load(res.data);
+            // console.log($('.post-list').children().first().text());
+            $('.card--content').each((index,element)=>{
+                // console.log($(element).children().first().text());
+            const link=$(element).children('h3').last().text();
+            const para=$(element).children('p').last().text();
+            // console.log(link + para);    
+            posts[index]={link, para};    
+            })
+
+            console.log(posts);
+        });
+
+
+
+
+URL = https://www.imdb.com/title/tt0111161/?pf_rd_m=A2FGELUUNOQJNL&pf_rd_p=e31d89dd-322d-4646-8962-327b42fe94b1&pf_rd_r=MV3G1CFT64EA8PD7THYZ&pf_rd_s=center-1&pf_rd_t=15506&pf_rd_i=top&ref_=chttp_tt_1
+
+$('div[class="title_wrapper"] > h1').text();
+$('div[class="title_wrapper"] > h1').text().trim();
+$('div[class="ratingValue"] > strong > span').text().trim();
+$('div[class="summary_text"]').text().trim();
+
+$('a[title="See more release dates"]').text().trim();
+
+*************copy selector to select exact path.**************************
+
+
+ 
