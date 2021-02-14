@@ -57,6 +57,13 @@ for(let movie of movies){
                 const j2csv=new json2csv();
                 const csv=j2csv.parse(imdbdata);
                 fs.writeFileSync("./imdb(axios).csv",csv,"utf-8");
+        
+                
+                app.get('/file',function(req,res){
+                    // const id = req.query.id;
+                    res.send(imdbdata);
+                });
+                
             
             // console.log($('.post-list').children().first().text());
             // $('.card--content').each((index,element)=>{
