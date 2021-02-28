@@ -1,0 +1,51 @@
+const puppeteer = require('puppeteer');
+const proxyChain = require('proxy-chain');
+
+(async() => {
+    const oldProxyUrl = 'http://bob:password123@proxy.example.com:8000';
+    const newProxyUrl = await proxyChain.anonymizeProxy(oldProxyUrl);
+
+    // Prints something like "http://127.0.0.1:45678"
+    console.log(newProxyUrl);
+
+    const browser = await puppeteer.launch({
+        args: [`--proxy-server=${newProxyUrl}`],
+    });
+
+    // Do your magic here...
+    const page = await browser.newPage();
+    await page.goto('https://www.example.com');
+    await page.screenshot({ path: 'example.png' });
+    await browser.close();
+    
+    // Clean up, forcibly close all pending connections
+    await proxyChain.closeAnonymizedProxy(newProxyUrl, true);
+})();
+
+
+
+=============================================2222222222222222222222222222222222222222222222222=================================
+
+
+
+
+
+const puppeteer = require('puppeteer');
+
+(async() => {
+    const proxyUrl = 'http://proxy.example.com:8000';
+    const username = 'bob';
+    const password = 'password123';
+
+    const browser = await puppeteer.launch({
+        args: [`--proxy-server=${proxyUrl}`],
+        headless: false,
+    });
+
+    const page = await browser.newPage();
+
+    await page.authenticate({ username, password });
+    await page.goto('https://www.example.com');
+
+    await browser.close();
+})();
