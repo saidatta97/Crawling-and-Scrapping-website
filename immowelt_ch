@@ -1,0 +1,558 @@
+/*****************************************************************************************************************
+@Author : Saidatta && Valdo
+@Date   : 28-04-2021
+@Description: Crawling and scraping functions for https://www.immowelt.ch
+@Modifications: 
+*****************************************************************************************************************/
+// npm modules
+var cheerio = require('cheerio');
+var request = require('request');
+var q = require('q');
+const getHrefs = require('get-hrefs');
+var sharp = require('sharp');
+var dateTime = require('node-datetime');
+const fs = require('fs');
+
+// framework libraries
+var Spider = require('../lib/spider');
+
+//Local variables
+var mainUrl = 'https://www.immowelt.ch';
+var spiderName = 'immowelt_ch';
+var maxPages = 30;
+
+//Different Parameters/filters for Url creation
+var projectType = ['living', 'commercial']
+
+var propertyTypeCommercialBuy =  ['buero-praxisflaechen', 'ladenflaechen', 'gastronomie-hotels', 'hallen-industrieflaechen', 'garage-stellplatz', 'landwirtschaft-forstwirtschaft','gewerbegrundstuecke','sonstige-immobilien','renditeobjekte'];
+var propertyTypeCommercialRent = ['buero-praxisflaechen', 'ladenflaechen', 'gastronomie-hotels', 'hallen-industrieflaechen', 'garage-stellplatz', 'landwirtschaft-forstwirtschaft','gewerbegrundstuecke','sonstige-immobilien'];
+
+var propertyTypeLivingRent = ['wohnungen', 'haeuser', 'wohnen-auf-zeit', 'wg', 'garage-stellplatz', 'grundstuecke','sonstige-immobilien']
+var propertyTypeLivingBuy = ['wohnungen', 'haeuser', 'renditeobjekte', 'garage-stellplatz', 'grundstuecke','sonstige-immobilien']
+
+var cantonsName = ['geneve', 'bern', 'zuerich', 'lausanne', 'winterthur', 'luzern', 'st-gallen', 'lugano', 'biel-be', 'thun', 'bellinzona', 'koeniz', 'fribourg','st-moritz', 'la-chaux-de-fonds', 'schaffhausen', 'chur','brig','montreux-montreux','zermatt','interlaken' ,'vernier', 'uster', 'sion']
+
+var numberOfCantons, commercialCantonIndex, batchCount, saveData, maxCount, maxHtmldataId, minHtmldataId, projectTypeIndex, propertyCommercialTypeIndex, propertyLivingTypeBuyIndex, propertyLivingRentTypeIndex, cantonsIndex, dataArray = [];
+var immowelt_ch = new Spider({
+    spider: spiderName
+});
+var l = -1;
+
+//public methods
+module.exports = {
+    crawl: crawl,
+    // downloadImage: downloadImage,
+    scrapePropertyHtml: scrapePropertyHtml,
+    crawlBatch: crawlBatch,
+    makeBatch: makeBatch,
+    scrapeBatch: scrapeBatch,
+    scrapeURL: scrapeURL
+    // scrapeBatchImages: scrapeBatchImages,
+    // convertImagesThumbnail: convertImagesThumbnail,
+    // base64ToThumbaBase64: base64ToThumbaBase64
+};
+
+//Methods
+//entry point for crawling
+function crawl(startPage, pages, bcount, save, rent, startcanton, cantons) {
+    currentPage = parseInt(startPage == undefined ? 1 : startPage);
+    pageCount = parseInt(pages == undefined ? maxPages : pages);
+    batchCount = bcount;
+    saveData = save;
+    projectTypeIndex = 0;
+    propertyLivingTypeBuyIndex = 0;
+    propertyCommercialTypeIndex = 0;
+    propertyLivingRentTypeIndex = 0;
+    cantonsIndex = parseInt(startcanton - 1);
+    maxCantons = cantons;
+    numberOfCantons = 0;
+    commercialCantonIndex = parseInt(startcanton - 1);
+    rentData = parseInt(rent);
+    //console.log('rentdata'+rentData)
+    if (rentData == 1) {
+        startCrawlRent(projectTypeIndex);
+    } else {
+        startCrawl(projectTypeIndex);
+    }
+}
+
+//Start crawling pages to build batch of property URLs
+//Buy
+function startCrawl(projectTypeIndex) {
+    if (projectType[projectTypeIndex] == 'living') {
+        // https://www.immowelt.ch/liste/geneve/haeuser/kaufen?primi=0&sort=relevanz
+        if (propertyLivingTypeBuyIndex < propertyTypeLivingBuy.length) {
+            listUrl = ' https://www.immowelt.ch/liste/' + cantonsName[cantonsIndex] +'/'+propertyTypeLivingBuy[propertyLivingTypeBuyIndex]+'/kaufen?primi=0&sort=relevanz';
+            console.log(listUrl)
+            crawlBatch(listUrl, projectType[projectTypeIndex], propertyTypeLivingBuy[propertyLivingTypeBuyIndex])
+                .then(function () {
+                    // console.log('hii')
+                    setTimeout(function () {
+                        propertyLivingTypeBuyIndex++;
+                        if (propertyLivingTypeBuyIndex < propertyTypeLivingBuy.length) {
+                            console.log("property increased")
+                            startCrawl(projectTypeIndex);
+                         } else {
+                            numberOfCantons++;
+                            if (propertyLivingTypeBuyIndex == propertyTypeLivingBuy.length && numberOfCantons < maxCantons) {
+                                cantonsIndex++;
+                                propertyLivingTypeBuyIndex = 0;
+                                console.log("canton increased")
+                                startCrawl(projectTypeIndex)
+                            } else {
+                                projectTypeIndex++;
+                                numberOfCantons = 0;
+                                startCrawl(projectTypeIndex);
+                            }
+                        }
+                    }, 5000);
+                    //1minutes wait before crawling same page(currentPage) for next propertyType
+                });
+        }
+    } 
+    else {
+        if (propertyCommercialTypeIndex < propertyTypeCommercialBuy.length) {
+            listUrl = ' https://www.immowelt.ch/liste/' + cantonsName[cantonsIndex] + '/' +propertyTypeCommercialBuy[propertyCommercialTypeIndex]+'/kaufen?primi=0&sort=relevanz';
+            console.log(listUrl)
+            crawlBatch(listUrl, projectType[projectTypeIndex], propertyTypeCommercialBuy[propertyCommercialTypeIndex])
+                .then(function () {
+                    setTimeout(function () {
+                        propertyCommercialTypeIndex++;
+                        if (propertyCommercialTypeIndex < propertyTypeCommercialBuy.length) {
+                            console.log("property increased")
+                            startCrawl(projectTypeIndex);
+                        } else {
+                            numberOfCantons++;
+                            if (propertyCommercialTypeIndex == propertyTypeCommercialBuy.length && numberOfCantons < maxCantons) {
+                                commercialCantonIndex++;
+                                propertyLivingTypeIndex = 0;
+                                console.log("canton increased")
+                                startCrawl(projectTypeIndex)
+                            }
+                        }
+                    }, 5000);
+                    //1minutes wait before crawling same page(currentPage) for next propertyType
+                });
+        }
+    }
+}
+
+
+//Rent
+function startCrawlRent(projectTypeIndex) {
+    if (projectType[projectTypeIndex] == 'living') {
+
+        if (propertyLivingRentTypeIndex < propertyTypeLivingRent.length) {
+            listUrl = ' https://www.immowelt.ch/liste/' + cantonsName[cantonsIndex] + '/' +propertyTypeLivingRent[propertyLivingRentTypeIndex]+'/mieten?primi=0&sort=relevanz';
+            console.log(listUrl)
+            crawlBatch(listUrl, projectType[projectTypeIndex], propertyTypeLivingRent[propertyLivingRentTypeIndex])
+                .then(function () {
+                    setTimeout(function () {
+                        propertyLivingRentTypeIndex++;
+                        if (propertyLivingRentTypeIndex < propertyTypeLivingRent.length) {
+                            console.log("property increased")
+                            startCrawlRent(projectTypeIndex);
+                        } else {
+                            numberOfCantons++;
+                            if (propertyLivingRentTypeIndex == propertyTypeLivingRent.length && numberOfCantons < maxCantons) {
+                                cantonsIndex++;
+                                propertyLivingRentTypeIndex = 0;
+                                console.log("canton increased")
+                                startCrawlRent(projectTypeIndex)
+                            } else {
+                                projectTypeIndex++;
+                                numberOfCantons = 0;
+                                startCrawlRent(projectTypeIndex);
+                            }
+                        }
+                    }, 5000);
+                    //1minutes wait before crawling same page(currentPage) for next propertyType
+                });
+        }
+    } else {
+        if (propertyCommercialTypeIndex < propertyTypeCommercialRent.length) {
+            listUrl = ' https://www.immowelt.ch/liste/' + cantonsName[cantonsIndex] + '/' +propertyTypeCommercialRent[propertyCommercialTypeIndex]+'/mieten?primi=0&sort=relevanz';
+            console.log(url)
+            crawlBatch(listUrl, projectType[projectTypeIndex], propertyTypeCommercialRent[propertyCommercialTypeIndex])
+                .then(function () {
+                    setTimeout(function () {
+                        propertyCommercialTypeIndex++;
+                        if (propertyCommercialTypeIndex < propertyTypeCommercialRent.length) {
+                            console.log("property increased")
+                            startCrawlRent(projectTypeIndex);
+                        } else {
+                            numberOfCantons++;
+                            if (propertyCommercialTypeIndex == propertyTypeCommercialRent.length && numberOfCantons < maxCantons) {
+                                commercialCantonIndex++;
+                                propertyCommercialTypeIndex = 0;
+                                console.log("canton increased")
+                                startCrawlRent(projectTypeIndex)
+                            }
+                        }
+                    }, 5000);
+                    //1minutes wait before crawling same page(currentPage) for next propertyType
+                });
+        }
+    }
+}
+
+
+//Gets html from the list of URLs and saves in the database
+function crawlBatch(url, project_type, property_type) {
+    var promises = [];
+    // console.log("in crawlbatch  " +url + "  "+ project_type +"  " +property_type + "\n");
+    return (
+        makeBatch(url, project_type, property_type)
+        .then(function (batch) {
+            //   console.log("batch",batch);
+            // console.log("after makebatch");
+
+            batch.map(function (object) {
+                promises.push(
+                    // immowelt_ch.datastore.propertyHtmlExistsimmowelt_ch(spiderName, object.id[0])
+                    // .then(function (exists) {
+                    //     // console.log("in crawlbatch");
+
+                    //     if (!saveData || !exists) {
+                            immowelt_ch.getUrlHtmlSecure(object.url)
+                                .then(function (html) {
+                                    // if (saveData) {
+                                        var property = {
+                                            id: object.id[0],
+                                            source: spiderName,
+                                            url: object.url,
+                                            html: html
+                                        };
+                                        // console.log(property)
+
+                                        immowelt_ch.datastore.saveHtmlCH(property)
+                                            .then(function (savedObj) {
+                                                if (savedObj !== undefined && savedObj !== null)
+                                                    console.log("HTML saved to the database :" + object.id);
+                                            })
+                                    // } else {
+                                    //     console.log('Crawled Property Id:' + object.id);
+                                    // }
+                                })
+                    //     } else {
+                    //         console.log('Property already crawled & exists in the database Id:' + object.id);
+                    //     }
+
+                    // })
+                );
+            });
+            return q.all(promises);
+        })
+    );
+}
+
+
+function makeBatch(url, project_type, property_type) {
+    console.log('Making batch for page :' + project_type + ' and property type :' + property_type);
+    return (
+        immowelt_ch.getUrbanHomeHtml(url)
+        .then(function (html) {
+            // console.log('hi');
+            var i, matches;
+            var arr = [];
+            var batch = [];
+            // var str = 'https://www.immowelt_ch.ch'
+            arr = getHrefs(html);
+            // console.log(arr);
+            // console.log(html)
+            // fs.writeFile('immoweltAD.html', html, function (err) {
+            //     if (err) throw err;
+            //     console.log('Html Is stored in file!');
+            //   })
+            for (i = 0; i < arr.length; i++) {
+                matches = arr[i].match(/^\/\expose\/[0-9a-zA-Z]{7}/g);
+
+                if (matches != null) {
+                    if (arr[i].includes('http')) {
+
+                        arr[i] = arr[i].replace('http', 'https');
+                    }
+                } else {
+                    arr.splice(i, 1)
+                    i--
+                }
+            }
+            for (i = 0; i < arr.length; i++) {
+                batch.push({
+                    url: mainUrl+arr[i],
+                    id: arr[i].match(/[0-9a-zA-Z]{7}/g)[0]
+                });
+
+            }
+            console.log(batch);
+            return batch;
+        })
+    );
+}
+
+//Entry point for batch scraping. Controls flow of scraping allowing 10 records concurrently
+function scrapeBatch(from, to, fdate, tdate, isprocessed, save) {
+    maxId = to;
+    minId = from;
+
+    fdateid = fdate;
+    tdateid = tdate;
+
+    isprocess = isNaN(isprocessed) ? 0 : isprocessed;
+    console.log("isprocess=" + isprocess)
+
+    maxHtmldataId;
+    minHtmldataId;
+
+    idToFetch = [];
+
+    if (fdateid == null) {
+        console.log("No date parameters passed, so scrapping based on id");
+
+        immowelt_ch.datastore.maxId(spiderName)
+            .then(function (max) {
+                maxHtmldataId = parseInt(isNaN(maxId) ? max : maxId);
+                console.log("maxHtmldataId=" + maxHtmldataId);
+
+                immowelt_ch.datastore.minId(spiderName, isprocess)
+                    .then(function (min) {
+                        Object.keys(min).map(function (e) {
+                            minHtmldataId = parseInt(isNaN(minId) ? min[e].min : minId);
+                            console.log("minHtmldataId=" + minHtmldataId);
+
+                        })
+                        if (isNaN(minHtmldataId)) {
+                            console.log("No min id to start with,scraping already done");
+                            return;
+                        }
+
+                        saveData = save;
+
+
+                        immowelt_ch.datastore.findId(spiderName, minHtmldataId, maxHtmldataId, null, null, isprocess)
+                            .then(function (result) {
+                                // console.log(result)
+                                Object.keys(result).map(function (e) {
+                                    dataArray.push({
+                                        idToFetch: result[e].id,
+                                        row_no: result[e].row_number
+                                    });
+                                });
+                                for (i = 1; i <= 10; i++) {
+                                    scrape();
+                                }
+                            })
+                    })
+            })
+
+    } else {
+        console.log("Date parameters passed, so scrapping based on date");
+        saveData = save;
+        immowelt_ch.datastore.findId(spiderName, null, null, fdate, tdate, isprocess)
+            .then(function (result) {
+                Object.keys(result).map(function (e) {
+                    dataArray.push({
+                        idToFetch: result[e].id,
+                        row_no: result[e].row_number
+                    });
+                });
+                for (i = 1; i <= 10; i++) {
+                    scrape();
+                }
+            })
+    }
+
+}
+
+
+// //start scraping batch or single entry from database
+function scrape() {
+    if (l >= dataArray.length - 1) {
+        // console.log("Scraping for this worker is done");
+        return;
+    }
+
+    l++;
+    immowelt_ch.datastore.getHtml(dataArray[l].idToFetch, 'immowelt_ch')
+        .then(function (html) {
+            //if (html !== null && html.dataValues.isprocessed == isprocess) {
+            if (html.dataValues.html !== null) {
+                var result = scrapePropertyHtml(html.dataValues.html);
+                result.push({
+                    attribute: "originalid",
+                    value: html.dataValues.originalid
+                });
+                result.push({
+                    attribute: "url",
+                    value: html.dataValues.url
+                });
+                result.push({
+                    attribute: "createdon",
+                    value: html.dataValues.createdon
+                });
+                // console.log(result)
+                return {
+                    res: result,
+                    id: html.dataValues.id
+                };
+            } else {
+                console.log("Incorrect id or source name");
+                scrape();
+            }
+        })
+        .then(function (resObj) {
+            if (resObj !== undefined) {
+                if (saveData) {
+                    var attr = [];
+                    var attribute, value;
+                    for (j = 0; j < resObj.res.length; j++) {
+                        attribute = immowelt_ch.cleankey(resObj.res[j].attribute);
+                        value = resObj.res[j].value;
+                        if ((attribute && attribute.length > 0) || (value && value.length > 0))
+                            attr.push({
+                                htmldataid: resObj.id,
+                                attribute: attribute,
+                                value: value
+                            })
+                    }
+                    immowelt_ch.datastore.saveAttributes(attr)
+                        .then(function (obj) {
+                            if (obj !== undefined && obj !== null) {
+                                immowelt_ch.datastore.updateIsProcessed(obj[0].dataValues.htmldataid, 1)
+                                    .then(function (updObj) {
+                                        scrape();
+                                        if (updObj[0] == 1)
+                                            console.log("Attributes saved & Isprocessed set to 1 for id:" + obj[0].dataValues.htmldataid);
+                                        else
+                                            console.log("There was an error while updating Isprocessed for id:" + obj[0].dataValues.htmldataid);
+                                    });
+                            }
+                        });
+                } else {
+                    scrape();
+                    console.log("Didn't save scraped data for Id:" + resObj.id);
+                }
+            }
+        })
+
+};
+
+//scrape from URL directly
+function scrapeURL(url, save) {
+    console.log(url);
+    immowelt_ch.getUrlHtmlSecure(url)
+        .then(function (html) {
+            // console.log('inside  html');
+            var result = scrapePropertyHtml(html);
+            console.log(result);
+        });
+}
+
+//Scrape proeprty details from html
+function scrapePropertyHtml(html) {
+
+    var property = []
+    let $ = cheerio.load(html);
+    // let $=page.html();
+    // console.log($);
+    //Source
+
+    property.push({
+        attribute: 'source',
+        value: spiderName
+    })
+
+    if (html.includes('Latitude') && html.includes('Longitude')) {
+        var lat = html.substring(html.indexOf('Latitude') + 12, html.indexOf(',', html.indexOf('Latitude')));
+        var lon = html.substring(html.indexOf('Longitude') + 13, html.indexOf(',', html.indexOf('Longitude')));
+
+        property.push({
+            attribute: 'lat',
+            value: lat
+        })
+        property.push({
+            attribute: 'lon',
+            value: lon
+        })
+    }
+    //Property characteristics
+    property.push({ attribute: 'title', value: $('h1').text().trim() });
+    property.push({ attribute: 'location', value: $('div.location').find('span').text().trim() });
+    property.push({ attribute: 'details', value: $('div.merkmale').text().trim() });
+
+    var sizes = $('div[class="hardfacts clear"]').find('div').find('div')
+    for (i = 0; i < sizes.length; i++) {
+        sizeText = $(sizes[i]).text().trim()
+
+        property.push({ attribute: sizeText, value: $('div[class="hardfacts clear"]').find('div').eq(i * 2).text().replace(sizeText, '').trim() });
+    }
+
+    // var rooms=$('div[class="hardfact rooms"]').find('div').text().trim()
+    // result.push({ attribute: rooms, value: $('div[class="hardfact rooms"]').text().replace(rooms,'').trim() });
+
+    $('div.datarow')
+        .filter(function () {
+            var data = $(this);
+            label = data.children().first().text();
+            value = data.children().next().text();
+            property.push({
+                attribute: label.trim(), value: value.replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim()
+            });
+        });
+    var i = 0;
+    for (var j = 0; i < 20 && j < 20; j++) {
+        if ($('div[class="section_label iw_left"]').eq(i) !== null && $('div[class="section_label iw_left"]').eq(i).text().trim() !== '') {
+            if (($('div[class*="section_content iw_right"]').eq(j).text().trim().includes('Online-ID') == false) ||
+                (($('div[class="section_label iw_left"]').eq(j).text().trim() != 'Das Haus') && ($('div[class="section_label iw_left"]').eq(j).text().trim() != 'Die Wohnung'))) {
+                    property.push({
+                    attribute: $('[class="section_label iw_left"]').eq(i).text().trim(), value: $('div[class*="section_content iw_right"]').eq(j).text().replace(/\r\n+/g, '\n').replace(/  +/g, ' ').replace(/\n/g, "").replace(/  +/g, ' ').trim()
+                });
+                i++;
+            }
+        } else {
+            i++;
+        }
+    }
+
+    if ($('div.location').find('span').text() !== '') {
+        matches = $('div.location').find('span').text().trim().match(/\d+/g);
+        if (matches != null) {
+            if (matches[0].trim().length == 5) {
+                property.push({ attribute: 'postcode', value: matches[0].trim() });
+            }
+        }
+    }
+
+    // if ($('div.location').text() !== '') {
+    //     result.push({ attribute: 'postcode', value: $('div.location').text().split(' ')[16].replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim() });
+    // }
+    var street = $('div.location span').text().split(',')[1]
+
+    if (street == undefined) {
+        property.push({ attribute: 'city', value: $('div.location span').text().substring(6).replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim() });
+    }
+    else {
+        property.push({ attribute: 'city', value: $('div.location span').text().split(',')[0].substring(6).replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim() });
+        property.push({ attribute: 'street', value: $('div.location span').text().split(',')[1].replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim() });
+    }
+    property.push({ attribute: $('div.hardfactlabel').eq(0).text().trim(), value: $('div.hardfact').children().first().text().replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim() });
+
+    // var buy_or_rent = $('div.hardfactlabel').eq(0).text().replace(/\r\n+/g, '\n').replace(/  +/g, ' ').trim();
+    var buy_or_rent = $('div[class="breadcrumb"]').text().trim()
+    if (buy_or_rent.includes("kaufen")) {
+        property.push({ attribute: 'buy_or_rent', value: "buy" });
+    }
+    if(buy_or_rent.includes("mieten")) {
+    property.push({ attribute: 'buy_or_rent', value: "rent" });
+    }
+
+    //contact details
+    // var contact=$('.grid_06o12_l grid_06o12_m grid_12o12_s order_2_s padding_bottom_none_s').find('strong').text();
+    // var contact=$('#divAnbieter > div > div > div.section_wrapper.iw_left > div > div:nth-child(3) > div.section_content.iw_right > div > p > strong').text()
+    // console.log(contact)
+    property.push({ attribute: 'contact_info', value: $('div[class="section_content iw_right relative"]').text().replace(/\n/g, "").replace(/  +/g, ' ').trim() });
+
+    //   console.log(property);
+    return property;
+
+}
